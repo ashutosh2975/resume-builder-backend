@@ -117,6 +117,14 @@ else:
         print(f"✅  SQLite database initialized at: {DB_PATH}")
 
 
+# ─── Initialize Database on App Startup ──────────────────────────────────────
+# This ensures tables are created whether run locally or on Render/production
+try:
+    init_db()
+except Exception as e:
+    print(f"⚠️  Database initialization warning: {e}")
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -1074,5 +1082,5 @@ if __name__ == "__main__":
     db_label = "PostgreSQL" if USE_POSTGRES else "SQLite (local dev fallback)"
     print(f"\n🗄️  Database mode : {db_label}")
     init_db()
-    print(f"🚀  Starting Flask on http://localhost:5000\n")
+    print(f"🚀  Starting Flask on http://https://resume-builder-backend-aj5w.onrender.com\n")
     app.run(debug=True, host="0.0.0.0", port=5000)
