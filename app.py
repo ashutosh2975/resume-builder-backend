@@ -11,6 +11,7 @@ import docx
 from pdfminer.high_level import extract_text as extract_pdf_text
 from groq import Groq
 from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
 
@@ -18,22 +19,20 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# ─── CORS: allow any localhost / 127.0.0.1 origin on any port ────────────────
-_LOCALHOST_RE = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
-
-@app.after_request
-def _add_cors(response):
-    origin = request.headers.get("Origin", "")
-    if _LOCALHOST_RE.match(origin):
-        response.headers["Access-Control-Allow-Origin"]  = origin
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    return response
-
-@app.route("/api/<path:path>", methods=["OPTIONS"])
-@app.route("/api/", methods=["OPTIONS"])
-def _handle_options(path=""):
-    return make_response("", 204)
+# ─── CORS: Configure for Vercel frontend and localhost development ────────────
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://resume-builder-frontend-rouge-two.vercel.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # ─── Test Route: Verify Backend is Running ───────────────────────────────────
 @app.route("/")
