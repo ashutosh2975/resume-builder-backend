@@ -35,6 +35,11 @@ def _add_cors(response):
 def _handle_options(path=""):
     return make_response("", 204)
 
+# ─── Test Route: Verify Backend is Running ───────────────────────────────────
+@app.route("/")
+def home():
+    return {"message": "Backend is running successfully 🚀"}
+
 SECRET_KEY   = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-change-in-production")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
