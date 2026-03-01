@@ -484,67 +484,81 @@ def health():
 
 @app.route("/api/auth/register", methods=["POST"])
 def register():
-    data      = request.get_json(silent=True) or {}
-    full_name = (data.get("full_name") or "").strip()
-    email     = (data.get("email")     or "").strip().lower()
-    password  = (data.get("password")  or "").strip()
-
-    errors = {}
-    if not full_name or len(full_name) < 2:
-        errors["full_name"] = "Full name must be at least 2 characters."
-    if not EMAIL_RE.match(email):
-        errors["email"] = "Please enter a valid email address."
-    if len(password) < 8:
-        errors["password"] = "Password must be at least 8 characters."
-    if errors:
-        return jsonify({"errors": errors}), 422
-
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     try:
-        conn = get_db()
-        if USE_POSTGRES:
-            cur = conn.cursor()
-            cur.execute("INSERT INTO users (full_name, email, password) VALUES (%s,%s,%s) RETURNING id,full_name,email",
-                        (full_name, email, hashed))
-            user = cur.fetchone(); conn.commit(); cur.close()
-        else:
-            cur = conn.execute("INSERT INTO users (full_name, email, password) VALUES (?,?,?)", (full_name, email, hashed))
-            conn.commit()
-            user = conn.execute("SELECT id,full_name,email FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
-        conn.close()
-    except Exception as e:
-        if is_unique_violation(e):
-            return jsonify({"errors": {"email": "An account with this email already exists."}}), 409
-        return jsonify({"error": f"Database error: {e}"}), 500
+        data      = request.get_json(silent=True) or {}
+        full_name = (data.get("full_name") or "").strip()
+        email     = (data.get("email")     or "").strip().lower()
+        password  = (data.get("password")  or "").strip()
 
-    return jsonify({"message": "Account created!", "token": make_token(user["id"], user["email"]),
-                    "user": {"id": user["id"], "full_name": user["full_name"], "email": user["email"]}}), 201
+        errors = {}
+        if not full_name or len(full_name) < 2:
+            errors["full_name"] = "Full name must be at least 2 characters."
+        if not EMAIL_RE.match(email):
+            errors["email"] = "Please enter a valid email address."
+        if len(password) < 8:
+            errors["password"] = "Password must be at least 8 characters."
+        if errors:
+            return jsonify({"errors": errors}), 422
+
+        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        try:
+            conn = get_db()
+            if USE_POSTGRES:
+                cur = conn.cursor()
+                cur.execute("INSERT INTO users (full_name, email, password) VALUES (%s,%s,%s) RETURNING id,full_name,email",
+                            (full_name, email, hashed))
+                user = cur.fetchone(); conn.commit(); cur.close()
+            else:
+                cur = conn.execute("INSERT INTO users (full_name, email, password) VALUES (?,?,?)", (full_name, email, hashed))
+                conn.commit()
+                user = conn.execute("SELECT id,full_name,email FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+            conn.close()
+        except Exception as e:
+            if is_unique_violation(e):
+                return jsonify({"errors": {"email": "An account with this email already exists."}}), 409
+            return jsonify({"error": f"Database error: {e}"}), 500
+
+        return jsonify({"message": "Account created!", "token": make_token(user["id"], user["email"]),
+                        "user": {"id": user["id"], "full_name": user["full_name"], "email": user["email"]}}), 201
+    
+    except Exception as e:
+        import traceback
+        print(f"❌ REGISTER ERROR: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
-    data     = request.get_json(silent=True) or {}
-    email    = (data.get("email")    or "").strip().lower()
-    password = (data.get("password") or "").strip()
-    if not email or not password:
-        return jsonify({"error": "Email and password are required."}), 400
     try:
-        conn = get_db()
-        if USE_POSTGRES:
-            cur = conn.cursor()
-            cur.execute("SELECT id,full_name,email,password FROM users WHERE email=%s", (email,))
-            user = cur.fetchone(); cur.close()
-        else:
-            user = conn.execute("SELECT id,full_name,email,password FROM users WHERE email=?", (email,)).fetchone()
-        conn.close()
+        data     = request.get_json(silent=True) or {}
+        email    = (data.get("email")    or "").strip().lower()
+        password = (data.get("password") or "").strip()
+        if not email or not password:
+            return jsonify({"error": "Email and password are required."}), 400
+        try:
+            conn = get_db()
+            if USE_POSTGRES:
+                cur = conn.cursor()
+                cur.execute("SELECT id,full_name,email,password FROM users WHERE email=%s", (email,))
+                user = cur.fetchone(); cur.close()
+            else:
+                user = conn.execute("SELECT id,full_name,email,password FROM users WHERE email=?", (email,)).fetchone()
+            conn.close()
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+
+        if not user or not bcrypt.checkpw(password.encode(), user["password"].encode()):
+            return jsonify({"error": "Invalid email or password."}), 401
+
+        return jsonify({"message": "Signed in!", "token": make_token(user["id"], user["email"]),
+                        "user": {"id": user["id"], "full_name": user["full_name"], "email": user["email"]}})
+    
     except Exception as e:
-        return jsonify({"error": f"Database error: {e}"}), 500
-
-    if not user or not bcrypt.checkpw(password.encode(), user["password"].encode()):
-        return jsonify({"error": "Invalid email or password."}), 401
-
-    return jsonify({"message": "Signed in!", "token": make_token(user["id"], user["email"]),
-                    "user": {"id": user["id"], "full_name": user["full_name"], "email": user["email"]}})
+        import traceback
+        print(f"❌ LOGIN ERROR: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @app.route("/api/auth/me", methods=["GET"])
